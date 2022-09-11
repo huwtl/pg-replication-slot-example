@@ -22,4 +22,6 @@ dependencies {
 
     testImplementation 'org.codehaus.groovy:groovy-all:3.0.12'
     testImplementation 'org.spockframework:spock-core:2.2-groovy-3.0'
+    testImplementation 'io.zonky.test:embedded-postgres:2.0.1'
+    testImplementation enforcedPlatform('io.zonky.test.postgres:embedded-postgres-binaries-bom:14.5.0')
 }
