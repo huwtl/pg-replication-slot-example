@@ -1,0 +1,1 @@
+# pg-replication-slot-example
