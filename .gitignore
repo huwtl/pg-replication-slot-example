@@ -1,0 +1,14 @@
+.gradle
+build/
+target/
+out/
+classes/
+/data/
+bin/
+.idea/
+*.iml
+*.log
+gradle-app.setting
+!gradle-wrapper.jar
+.gradletasknamecache
+.DS_Store
