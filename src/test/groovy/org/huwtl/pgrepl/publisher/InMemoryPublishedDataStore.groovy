@@ -1,19 +1,18 @@
 package org.huwtl.pgrepl.publisher
 
-class InMemoryPublishedDataStore<T> implements Publisher<T>, AutoCloseable {
-    private final List<T> published = []
+class InMemoryPublishedDataStore implements Publisher {
+    private final List<Data> published = []
 
     @Override
-    void publish(T data) {
+    void publish(Data data) {
         published.add(data)
     }
 
-    @Override
-    void close() {
+    void reset() {
         published.clear()
     }
 
-    List<T> published() {
+    List<Data> published() {
         published.asImmutable()
     }
 }
