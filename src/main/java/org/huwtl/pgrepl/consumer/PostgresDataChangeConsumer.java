@@ -5,6 +5,7 @@ import org.apache.logging.log4j.Logger;
 import org.huwtl.pgrepl.DatabaseConfiguration;
 import org.huwtl.pgrepl.ObjectMapperFactory;
 import org.huwtl.pgrepl.ReplicationConfiguration;
+import org.huwtl.pgrepl.publisher.Data;
 import org.huwtl.pgrepl.publisher.Publisher;
 
 import java.io.IOException;
@@ -82,7 +83,18 @@ class PostgresDataChangeConsumer implements AutoCloseable {
                             replicationConfig.schemaNameToDetectChangesFrom(),
                             replicationConfig.tableNameToDetectChangesFrom()
                     )
-                    .forEach(publisher::publish);
+                    .forEach(data -> publishDataChange(data, postgresConnector));
+        }
+    }
+
+    private void publishDataChange(Data data, PostgresConnector postgresConnector) {
+        var lastReceivedLogSequenceNumber = postgresConnector.lastReceivedLogSequenceNumber();
+        try {
+            publisher.publish(data);
+            postgresConnector.updateLogSequenceNumber(lastReceivedLogSequenceNumber);
+        } catch (Exception e) {
+            LOGGER.error("unexpected exception when publishing data change for log sequence number {}",
+                    lastReceivedLogSequenceNumber, e);
         }
     }
 

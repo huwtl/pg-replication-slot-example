@@ -1,9 +1,11 @@
 package org.huwtl.pgrepl.consumer
 
 import groovy.sql.Sql
+import org.huwtl.pgrepl.DatabaseConfiguration
 import org.huwtl.pgrepl.ReplicationConfiguration
 import org.huwtl.pgrepl.db.EmbeddedPostgresContainer
 import org.huwtl.pgrepl.publisher.Data
+import org.huwtl.pgrepl.publisher.ExceptionThrowingPublisher
 import org.huwtl.pgrepl.publisher.InMemoryPublishedDataStore
 import spock.lang.AutoCleanup
 import spock.lang.Shared
@@ -33,29 +35,37 @@ class PostgresDataChangeConsumerTest extends Specification {
     @AutoCleanup
     private PostgresDataChangeConsumer consumer
     @Shared
-    private InMemoryPublishedDataStore publisher
+    private InMemoryPublishedDataStore inMemoryPublisher
+    @Shared
+    private ExceptionThrowingPublisher exceptionThrowingPublisher
+    @Shared
+    private DatabaseConfiguration databaseConfig
+    @Shared
+    private ReplicationConfiguration replicationConfig
 
     def setupSpec() {
         database = new EmbeddedPostgresContainer()
-        publisher = new InMemoryPublishedDataStore()
-        def databaseConfig = database.configuration()
-        def replicationConfig = ReplicationConfiguration.builder()
-                .slotName(REPLICATION_SLOT_NAME)
-                .schemaNameToDetectChangesFrom(SCHEMA_NAME)
-                .tableNameToDetectChangesFrom(TABLE_NAME)
-                .build()
-        consumer = new PostgresDataChangeConsumer(publisher, databaseConfig, replicationConfig)
+        inMemoryPublisher = new InMemoryPublishedDataStore()
+        exceptionThrowingPublisher = ExceptionThrowingPublisher.willNotThrowException(inMemoryPublisher)
         database.sql().tap {
             it.execute(CREATE_SCHEMA_SQL)
         }
         sql = database.sqlForSchema(SCHEMA_NAME).tap {
             it.execute(CREATE_TABLE_SQL)
         }
+        databaseConfig = database.configuration()
+        replicationConfig = ReplicationConfiguration.builder()
+                .slotName(REPLICATION_SLOT_NAME)
+                .schemaNameToDetectChangesFrom(SCHEMA_NAME)
+                .tableNameToDetectChangesFrom(TABLE_NAME)
+                .build()
+        consumer = startedConsumer()
     }
 
     def cleanup() {
         sql.execute(DELETE_ALL_SQL)
-        publisher.reset()
+        inMemoryPublisher.reset()
+        exceptionThrowingPublisher.reset()
     }
 
     def cleanupSpec() {
@@ -64,19 +74,16 @@ class PostgresDataChangeConsumerTest extends Specification {
 
     @Unroll
     def "consumes data"() {
-        given:
+        when:
         numberOfInserts.times {
             sql.executeInsert(INSERT_SQL, [it, "some data $it" as String])
             sql.executeInsert(UPDATE_DATA_BY_ID_SQL, ["updated data $it" as String, it])
             sql.executeInsert(DELETE_BY_ID_SQL, it)
         }
 
-        when:
-        consumer.start()
-
         then:
-        new PollingConditions(timeout: 10).eventually {
-            publisher.published() == published
+        new PollingConditions(timeout: 5).eventually {
+            inMemoryPublisher.published() == published
         }
 
         where:
@@ -84,11 +91,40 @@ class PostgresDataChangeConsumerTest extends Specification {
         0               || []
         1               || [new Data(id: 0, data: "some data 0")]
         5               || [
-                new Data([id: 0, data: "some data 0"]),
-                new Data([id: 1, data: "some data 1"]),
-                new Data([id: 2, data: "some data 2"]),
-                new Data([id: 3, data: "some data 3"]),
-                new Data([id: 4, data: "some data 4"])
+                new Data(id: 0, data: "some data 0"),
+                new Data(id: 1, data: "some data 1"),
+                new Data(id: 2, data: "some data 2"),
+                new Data(id: 3, data: "some data 3"),
+                new Data(id: 4, data: "some data 4")
         ]
+    }
+
+    def "does not miss publishing changed data after a restart"() {
+        given:
+        exceptionThrowingPublisher.willThrowException()
+
+        and:
+        sql.executeInsert(INSERT_SQL, [1, "stuff"])
+
+        when:
+        consumer.close()
+        inMemoryPublisher.reset()
+        exceptionThrowingPublisher.willNotThrowException()
+
+        and:
+        consumer = startedConsumer()
+
+        then:
+        new PollingConditions(timeout: 5).eventually {
+            inMemoryPublisher.published().contains(
+                    new Data(id: 1, data: "stuff")
+            )
+        }
+    }
+
+    private PostgresDataChangeConsumer startedConsumer() {
+        new PostgresDataChangeConsumer(exceptionThrowingPublisher, databaseConfig, replicationConfig).tap {
+            it.start()
+        }
     }
 }

@@ -4,6 +4,7 @@ import org.apache.logging.log4j.Logger;
 import org.huwtl.pgrepl.DatabaseConfiguration;
 import org.huwtl.pgrepl.ReplicationConfiguration;
 import org.postgresql.PGConnection;
+import org.postgresql.replication.LogSequenceNumber;
 import org.postgresql.replication.PGReplicationConnection;
 import org.postgresql.replication.PGReplicationStream;
 import org.postgresql.util.PSQLException;
@@ -38,6 +39,15 @@ class PostgresConnector implements AutoCloseable {
 
     ByteBuffer read() throws SQLException {
         return replicationStream.read();
+    }
+
+    LogSequenceNumber lastReceivedLogSequenceNumber() {
+        return replicationStream.getLastReceiveLSN();
+    }
+
+    void updateLogSequenceNumber(LogSequenceNumber logSequenceNumber) {
+        replicationStream.setAppliedLSN(logSequenceNumber);
+        replicationStream.setFlushedLSN(logSequenceNumber);
     }
 
     @Override
