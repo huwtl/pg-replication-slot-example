@@ -52,20 +52,20 @@ class PostgresConnector implements AutoCloseable {
 
     @Override
     public void close() {
-        if (replicationStream != null) {
-            try {
+        try {
+            if (!replicationStream.isClosed()) {
                 replicationStream.forceUpdateStatus();
                 replicationStream.close();
-            } catch (SQLException e) {
-                LOGGER.error("Unable to close replication stream", e);
             }
+        } catch (SQLException e) {
+            LOGGER.error("Unable to close replication stream", e);
         }
-        if (replicationConnection != null) {
-            try {
+        try {
+            if (!replicationConnection.isClosed()) {
                 replicationConnection.close();
-            } catch (SQLException e) {
-                LOGGER.error("Unable to close postgres streaming connection", e);
             }
+        } catch (SQLException e) {
+            LOGGER.error("Unable to close postgres streaming connection", e);
         }
     }
 

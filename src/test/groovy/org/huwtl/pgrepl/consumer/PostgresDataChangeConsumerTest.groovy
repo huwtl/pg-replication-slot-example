@@ -108,6 +108,7 @@ class PostgresDataChangeConsumerTest extends Specification {
 
         when:
         consumer.close()
+        consumer.close()
         inMemoryPublisher.reset()
         exceptionThrowingPublisher.willNotThrowException()
 
