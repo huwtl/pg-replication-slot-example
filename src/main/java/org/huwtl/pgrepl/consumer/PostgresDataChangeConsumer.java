@@ -12,11 +12,12 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.logging.log4j.LogManager.getLogger;
 
-class PostgresDataChangeConsumer implements AutoCloseable {
+public class PostgresDataChangeConsumer implements AutoCloseable {
     private static final Logger LOGGER = getLogger();
     private static final int SHUTDOWN_TIMEOUT_IN_SECONDS = 5;
 
@@ -26,7 +27,7 @@ class PostgresDataChangeConsumer implements AutoCloseable {
     private final ObjectMapper objectMapper;
     private final ExecutorService executorService;
 
-    PostgresDataChangeConsumer(
+    public PostgresDataChangeConsumer(
             Publisher publisher,
             DatabaseConfiguration postgresConfig,
             ReplicationConfiguration replicationConfig) throws SQLException {
@@ -37,12 +38,13 @@ class PostgresDataChangeConsumer implements AutoCloseable {
         this.executorService = Executors.newSingleThreadExecutor();
     }
 
-    void start() {
-        executorService.execute(() -> {
+    public Future<Boolean> start() {
+        return executorService.submit(() -> {
             LOGGER.info("Consuming from replication slot {}", replicationSlotName());
             while (!executorService.isShutdown()) {
                 consumeAndPublishChanges();
             }
+            return true;
         });
     }
 
