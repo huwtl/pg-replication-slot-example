@@ -54,7 +54,7 @@ class PostgresConnector implements AutoCloseable {
     @Override
     public void close() {
         try {
-            if (!replicationStream.isClosed()) {
+            if (replicationStream != null && !replicationStream.isClosed()) {
                 replicationStream.forceUpdateStatus();
                 replicationStream.close();
                 LOGGER.info("Replication stream closed");
@@ -63,7 +63,7 @@ class PostgresConnector implements AutoCloseable {
             LOGGER.error("Unable to close replication stream", e);
         }
         try {
-            if (!replicationConnection.isClosed()) {
+            if (replicationConnection != null && !replicationConnection.isClosed()) {
                 replicationConnection.close();
                 LOGGER.info("Replication connection closed");
             }
@@ -108,6 +108,7 @@ class PostgresConnector implements AutoCloseable {
             if (e.getSQLState().equals(CURRENTLY_RUNNING_PROCESS_ON_SLOT_SQL_STATE)) {
                 var slotName = replicationConfig.slotName();
                 LOGGER.info("Replication slot {} currently has another process consuming from it", slotName);
+                close();
             }
             throw e;
         }
