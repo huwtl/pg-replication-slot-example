@@ -9,7 +9,6 @@ import static java.sql.DriverManager.getConnection
 
 class EmbeddedPostgresContainer implements AutoCloseable {
     private static final PORT = 5432
-
     private static final USER = "postgres"
     private static final PASSWORD = "postgres"
     private static final DATABASE = "pg_replication_test"

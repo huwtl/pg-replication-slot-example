@@ -88,6 +88,8 @@ public class PostgresDataChangeConsumer implements AutoCloseable {
             var slotMessage = objectMapper.readValue(bytes, offset, bytes.length, SlotMessage.class);
             LOGGER.info("pending changes received: {} with lsn {}", slotMessage, lastReceivedLogSequenceNumber);
             slotMessage
+                    // todo hlewis: we should ideally update the lsn for any slot message not matching this filter. The
+                    //  only time we wouldn't want to update the lsn for a slot message is for failed publishes
                     .filterInsertsBySchemaAndTable(
                             replicationConfig.schemaNameToDetectChangesFrom(),
                             replicationConfig.tableNameToDetectChangesFrom()
