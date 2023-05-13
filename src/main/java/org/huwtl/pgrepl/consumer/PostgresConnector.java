@@ -15,6 +15,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Properties;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.logging.log4j.LogManager.getLogger;
 
 class PostgresConnector implements AutoCloseable {
@@ -37,8 +38,8 @@ class PostgresConnector implements AutoCloseable {
         replicationStream = replicationStream(replicationConfig, postgresReplicationApi);
     }
 
-    ByteBuffer read() throws SQLException {
-        return replicationStream.read();
+    ByteBuffer readPending() throws SQLException {
+        return replicationStream.readPending();
     }
 
     LogSequenceNumber lastReceivedLogSequenceNumber() {
@@ -98,6 +99,7 @@ class PostgresConnector implements AutoCloseable {
                     .replicationStream()
                     .logical()
                     .withSlotName(replicationConfig.slotName())
+                    .withStatusInterval(replicationConfig.statusIntervalInMillis(), MILLISECONDS)
                     .withSlotOptions(replicationConfig.slotOptions())
                     .start();
         } catch (PSQLException e) {

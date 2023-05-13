@@ -5,7 +5,9 @@ import java.util.Properties;
 public record ReplicationConfiguration(
         String slotName,
         String schemaNameToDetectChangesFrom,
-        String tableNameToDetectChangesFrom) {
+        String tableNameToDetectChangesFrom,
+        int statusIntervalInMillis,
+        long pollingIntervalInMillis) {
     private static final String OUTPUT_PLUGIN = "wal2json";
     private static final String INCLUDE_XIDS = "true";
 
@@ -24,9 +26,14 @@ public record ReplicationConfiguration(
     }
 
     public static class Builder {
+        private static final int DEFAULT_STATUS_INTERVAL_IN_MILLIS = 5000;
+        private static final long DEFAULT_POLLING_INTERVAL_IN_MILLIS = 1000;
+
         private String slotName;
         private String schemaNameToDetectChangesFrom;
         private String tableNameToDetectChangesFrom;
+        private int statusIntervalInMillis = DEFAULT_STATUS_INTERVAL_IN_MILLIS;
+        private long pollingIntervalInMillis = DEFAULT_POLLING_INTERVAL_IN_MILLIS;
 
         public Builder slotName(String slotName) {
             this.slotName = slotName;
@@ -43,11 +50,23 @@ public record ReplicationConfiguration(
             return this;
         }
 
+        public Builder statusIntervalInMillis(int statusIntervalInMillis) {
+            this.statusIntervalInMillis = statusIntervalInMillis;
+            return this;
+        }
+
+        public Builder pollingIntervalInMillis(long pollingIntervalInMillis) {
+            this.pollingIntervalInMillis = pollingIntervalInMillis;
+            return this;
+        }
+
         public ReplicationConfiguration build() {
             return new ReplicationConfiguration(
                     slotName,
                     schemaNameToDetectChangesFrom,
-                    tableNameToDetectChangesFrom
+                    tableNameToDetectChangesFrom,
+                    statusIntervalInMillis,
+                    pollingIntervalInMillis
             );
         }
     }

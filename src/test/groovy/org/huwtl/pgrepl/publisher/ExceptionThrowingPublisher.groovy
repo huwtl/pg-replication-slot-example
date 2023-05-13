@@ -3,6 +3,7 @@ package org.huwtl.pgrepl.publisher
 class ExceptionThrowingPublisher implements Publisher {
     private final Publisher delegate
     private Exception exceptionToThrow
+    private boolean hasThrownException = false
 
     ExceptionThrowingPublisher(Publisher delegate) {
         this.delegate = delegate
@@ -16,6 +17,7 @@ class ExceptionThrowingPublisher implements Publisher {
     @Override
     void publish(Data data) {
         if (exceptionToThrow) {
+            hasThrownException = true
             throw exceptionToThrow
         }
         delegate.publish(data)
@@ -31,7 +33,12 @@ class ExceptionThrowingPublisher implements Publisher {
         this
     }
 
+    boolean hasThrownException() {
+        return hasThrownException
+    }
+
     void reset() {
         willNotThrowException()
+        hasThrownException = false
     }
 }

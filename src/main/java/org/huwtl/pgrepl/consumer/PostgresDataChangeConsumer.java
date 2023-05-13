@@ -7,6 +7,7 @@ import org.huwtl.pgrepl.ObjectMapperFactory;
 import org.huwtl.pgrepl.ReplicationConfiguration;
 import org.huwtl.pgrepl.publisher.Data;
 import org.huwtl.pgrepl.publisher.Publisher;
+import org.postgresql.replication.LogSequenceNumber;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -74,29 +75,44 @@ public class PostgresDataChangeConsumer implements AutoCloseable {
     }
 
     private void consumeAndPublishChanges(PostgresConnector postgresConnector) throws SQLException, IOException {
-        var buffer = postgresConnector.read();
+        var buffer = postgresConnector.readPending();
+        var lastReceivedLogSequenceNumber = postgresConnector.lastReceivedLogSequenceNumber();
         if (buffer != null) {
             var offset = buffer.arrayOffset();
             var bytes = buffer.array();
             var slotMessage = objectMapper.readValue(bytes, offset, bytes.length, SlotMessage.class);
-            LOGGER.info("pending changes: {}", slotMessage);
+            LOGGER.info("pending changes received: {} with lsn {}", slotMessage, lastReceivedLogSequenceNumber);
             slotMessage
                     .filterInsertsBySchemaAndTable(
                             replicationConfig.schemaNameToDetectChangesFrom(),
                             replicationConfig.tableNameToDetectChangesFrom()
                     )
-                    .forEach(data -> publishDataChange(data, postgresConnector));
+                    .forEach(data -> publishDataChange(data, lastReceivedLogSequenceNumber, postgresConnector));
+        } else {
+            LOGGER.info("no changes received with lsn {}", lastReceivedLogSequenceNumber);
+            waitAfterNoDataReceivedToGiveThreadSomePeaceAndTranquillity(replicationConfig);
         }
     }
 
-    private void publishDataChange(Data data, PostgresConnector postgresConnector) {
-        var lastReceivedLogSequenceNumber = postgresConnector.lastReceivedLogSequenceNumber();
+    private void publishDataChange(
+            Data data,
+            LogSequenceNumber lastReceivedLogSequenceNumber,
+            PostgresConnector postgresConnector) {
         try {
             publisher.publish(data);
             postgresConnector.updateLogSequenceNumber(lastReceivedLogSequenceNumber);
         } catch (Exception e) {
-            LOGGER.error("unexpected exception when publishing data change for log sequence number {}",
+            LOGGER.error("unexpected exception when publishing data change with lsn {}",
                     lastReceivedLogSequenceNumber, e);
+        }
+    }
+
+    private void waitAfterNoDataReceivedToGiveThreadSomePeaceAndTranquillity(
+            ReplicationConfiguration replicationConfig) {
+        try {
+            Thread.sleep(replicationConfig.pollingIntervalInMillis());
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
