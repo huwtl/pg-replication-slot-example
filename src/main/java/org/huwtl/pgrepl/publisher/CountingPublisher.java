@@ -4,11 +4,14 @@ import org.apache.logging.log4j.Logger;
 
 import static org.apache.logging.log4j.LogManager.getLogger;
 
-public class LoggingPublisher implements Publisher {
+public class CountingPublisher implements Publisher {
     private static final Logger LOGGER = getLogger();
+
+    private long numberOfPublishes = 0;
 
     @Override
     public void publish(Data data) {
-        LOGGER.info("Data published {}", data);
+        numberOfPublishes++;
+        LOGGER.info("Number of publishes {} - data published {}", numberOfPublishes, data);
     }
 }

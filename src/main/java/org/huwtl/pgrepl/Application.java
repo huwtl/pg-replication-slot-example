@@ -2,7 +2,7 @@ package org.huwtl.pgrepl;
 
 import org.apache.logging.log4j.core.tools.picocli.CommandLine;
 import org.huwtl.pgrepl.consumer.PostgresDataChangeConsumer;
-import org.huwtl.pgrepl.publisher.LoggingPublisher;
+import org.huwtl.pgrepl.publisher.CountingPublisher;
 
 import java.sql.SQLException;
 import java.util.concurrent.ExecutionException;
@@ -37,7 +37,7 @@ public class Application implements Runnable {
     @Override
     public void run() {
         try (var postgresDataChangeConsumer = new PostgresDataChangeConsumer(
-                new LoggingPublisher(),
+                new CountingPublisher(),
                 DatabaseConfiguration.builder()
                         .port(databasePort)
                         .host(databaseHost)
