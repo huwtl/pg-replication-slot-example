@@ -76,7 +76,7 @@ class PostgresDataChangeConsumerTest extends Specification {
     }
 
     @Unroll
-    def "consumes data"() {
+    def "consumes data from inserts only"() {
         when:
         numberOfInserts.times {
             sql.executeInsert(INSERT_SQL, [it, "some data $it" as String])
@@ -129,6 +129,32 @@ class PostgresDataChangeConsumerTest extends Specification {
         new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
             inMemoryPublisher.published() == [
                     new Data(id: 2, data: "stuff 2")
+            ]
+        }
+    }
+
+    def "resilient to restart with no data changes missed"() {
+        given:
+        exceptionThrowingPublisher.willThrowException()
+        sql.executeInsert(INSERT_SQL, [1, "stuff"])
+
+        and:
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            assert exceptionThrowingPublisher.hasThrownException()
+        }
+
+        and:
+        consumer.close()
+        inMemoryPublisher.reset()
+        exceptionThrowingPublisher.willNotThrowException()
+
+        when:
+        consumer = startedConsumer()
+
+        then:
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            inMemoryPublisher.published() == [
+                    new Data(id: 1, data: "stuff")
             ]
         }
     }

@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import static java.lang.Runtime.getRuntime;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.logging.log4j.LogManager.getLogger;
 
@@ -40,6 +41,8 @@ public class PostgresDataChangeConsumer implements AutoCloseable {
     }
 
     public Future<Boolean> start() {
+        addShutdownHook();
+
         return executorService.submit(() -> {
             LOGGER.info("Consuming from replication slot {}", replicationSlotName());
             while (!executorService.isShutdown()) {
@@ -117,5 +120,9 @@ public class PostgresDataChangeConsumer implements AutoCloseable {
 
     private String replicationSlotName() {
         return replicationConfig.slotName();
+    }
+
+    private void addShutdownHook() {
+        getRuntime().addShutdownHook(new Thread(this::close));
     }
 }
