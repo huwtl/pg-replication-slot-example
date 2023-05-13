@@ -3,11 +3,11 @@ package org.huwtl.pgrepl.db
 import groovy.sql.Sql
 import org.huwtl.pgrepl.DatabaseConfiguration
 import org.testcontainers.containers.GenericContainer
+import org.testcontainers.images.builder.ImageFromDockerfile
 
 import static java.sql.DriverManager.getConnection
 
 class EmbeddedPostgresContainer implements AutoCloseable {
-    private static final CONTAINER_VERSION = "debezium/postgres:11-alpine"
     private static final PORT = 5432
 
     private static final USER = "postgres"
@@ -17,7 +17,11 @@ class EmbeddedPostgresContainer implements AutoCloseable {
     private final GenericContainer container
 
     EmbeddedPostgresContainer() {
-        container = new GenericContainer(CONTAINER_VERSION).tap {
+        container = new GenericContainer(
+                new ImageFromDockerfile()
+                        .withFileFromClasspath("Dockerfile", "postgres_container/Dockerfile")
+                        .withFileFromClasspath("postgresql.conf.sample", "postgres_container/postgresql.conf.sample")
+        ).tap {
             withExposedPorts(PORT)
             withEnv("POSTGRES_USER", USER)
             withEnv("POSTGRES_PASSWORD", PASSWORD)
