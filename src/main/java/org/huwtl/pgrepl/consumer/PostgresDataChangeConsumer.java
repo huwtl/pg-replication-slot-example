@@ -23,18 +23,18 @@ public class PostgresDataChangeConsumer implements AutoCloseable {
     private static final int SHUTDOWN_TIMEOUT_IN_SECONDS = 5;
 
     private final Publisher publisher;
+    private final DatabaseConfiguration databaseConfiguration;
     private final ReplicationConfiguration replicationConfig;
-    private final PostgresConnector postgresConnector;
     private final ObjectMapper objectMapper;
     private final ExecutorService executorService;
 
     public PostgresDataChangeConsumer(
             Publisher publisher,
-            DatabaseConfiguration postgresConfig,
+            DatabaseConfiguration databaseConfiguration,
             ReplicationConfiguration replicationConfig) throws SQLException {
         this.publisher = publisher;
+        this.databaseConfiguration = databaseConfiguration;
         this.replicationConfig = replicationConfig;
-        this.postgresConnector = new PostgresConnector(postgresConfig, replicationConfig);
         this.objectMapper = ObjectMapperFactory.objectMapper();
         this.executorService = Executors.newSingleThreadExecutor();
     }
@@ -43,7 +43,12 @@ public class PostgresDataChangeConsumer implements AutoCloseable {
         return executorService.submit(() -> {
             LOGGER.info("Consuming from replication slot {}", replicationSlotName());
             while (!executorService.isShutdown()) {
-                consumeAndPublishChanges();
+                try (var postgresConnector = new PostgresConnector(databaseConfiguration, replicationConfig)) {
+                    consumeAndPublishChanges(postgresConnector);
+                } catch (Exception e) {
+                    LOGGER.error("Unexpected error while consuming data changes", e);
+                    waitAfterNoDataReceivedToGiveThreadSomePeaceAndTranquillity(replicationConfig);
+                }
             }
             return true;
         });
@@ -62,19 +67,16 @@ public class PostgresDataChangeConsumer implements AutoCloseable {
             LOGGER.error("Unexpected error during consumer shutdown", e);
             executorService.shutdownNow();
         }
-        postgresConnector.close();
         LOGGER.info("Successfully shutdown consumer");
     }
 
-    private void consumeAndPublishChanges() {
-        try {
-            consumeAndPublishChanges(postgresConnector);
-        } catch (Exception e) {
-            LOGGER.error("unexpected exception when consuming from replication slot {}", replicationSlotName(), e);
+    private void consumeAndPublishChanges(PostgresConnector postgresConnector) throws SQLException, IOException {
+        while (!executorService.isShutdown()) {
+            consumeAndPublishNextChange(postgresConnector);
         }
     }
 
-    private void consumeAndPublishChanges(PostgresConnector postgresConnector) throws SQLException, IOException {
+    private void consumeAndPublishNextChange(PostgresConnector postgresConnector) throws SQLException, IOException {
         var buffer = postgresConnector.readPending();
         var lastReceivedLogSequenceNumber = postgresConnector.lastReceivedLogSequenceNumber();
         if (buffer != null) {
@@ -90,6 +92,7 @@ public class PostgresDataChangeConsumer implements AutoCloseable {
                     .forEach(data -> publishDataChange(data, lastReceivedLogSequenceNumber, postgresConnector));
         } else {
             LOGGER.info("no changes received with lsn {}", lastReceivedLogSequenceNumber);
+            postgresConnector.updateLogSequenceNumber(lastReceivedLogSequenceNumber);
             waitAfterNoDataReceivedToGiveThreadSomePeaceAndTranquillity(replicationConfig);
         }
     }
@@ -98,13 +101,8 @@ public class PostgresDataChangeConsumer implements AutoCloseable {
             Data data,
             LogSequenceNumber lastReceivedLogSequenceNumber,
             PostgresConnector postgresConnector) {
-        try {
-            publisher.publish(data);
-            postgresConnector.updateLogSequenceNumber(lastReceivedLogSequenceNumber);
-        } catch (Exception e) {
-            LOGGER.error("unexpected exception when publishing data change with lsn {}",
-                    lastReceivedLogSequenceNumber, e);
-        }
+        publisher.publish(data);
+        postgresConnector.updateLogSequenceNumber(lastReceivedLogSequenceNumber);
     }
 
     private void waitAfterNoDataReceivedToGiveThreadSomePeaceAndTranquillity(
@@ -112,6 +110,7 @@ public class PostgresDataChangeConsumer implements AutoCloseable {
         try {
             Thread.sleep(replicationConfig.pollingIntervalInMillis());
         } catch (InterruptedException e) {
+            LOGGER.error("interrupted while waiting during polling interval", e);
             throw new RuntimeException(e);
         }
     }

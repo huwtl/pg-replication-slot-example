@@ -24,6 +24,7 @@ class PostgresDataChangeConsumerTest extends Specification {
     private static final String UPDATE_DATA_BY_ID_SQL = "UPDATE ${TABLE_NAME} SET data = ? WHERE id = ?"
     private static final String DELETE_BY_ID_SQL = "DELETE FROM ${TABLE_NAME} WHERE id = ?"
     private static final String DELETE_ALL_SQL = "DELETE FROM ${TABLE_NAME}"
+    private static final int ASYNC_ASSERTION_TIMEOUT_IN_SECS = 5
 
     @Shared
     @AutoCleanup
@@ -84,7 +85,7 @@ class PostgresDataChangeConsumerTest extends Specification {
         }
 
         then:
-        new PollingConditions(timeout: 5).eventually {
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
             inMemoryPublisher.published() == published
         }
 
@@ -101,41 +102,34 @@ class PostgresDataChangeConsumerTest extends Specification {
         ]
     }
 
-    def "does not miss publishing changed data after a restart"() {
+    def "does not miss publishing changed data that failed to be published"() {
         given:
         sql.executeInsert(INSERT_SQL, [1, "stuff"])
-
-        and:
-        new PollingConditions(timeout: 5).eventually {
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
             assert inMemoryPublisher.published() == [
                     new Data(id: 1, data: "stuff")
             ]
         }
+        inMemoryPublisher.reset()
 
         and:
         exceptionThrowingPublisher.willThrowException()
         sql.executeInsert(INSERT_SQL, [2, "stuff 2"])
 
-        and:
-        new PollingConditions(timeout: 5).eventually {
-            assert exceptionThrowingPublisher.hasThrownException()
+        expect:
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            exceptionThrowingPublisher.hasThrownException()
         }
+        inMemoryPublisher.empty()
 
         when:
-        consumer.close()
-        inMemoryPublisher.reset()
         exceptionThrowingPublisher.willNotThrowException()
 
-        and:
-        consumer = startedConsumer()
-
         then:
-        // todo hlewis: change this assertion to == [new Data(id: 2, data: "stuff 2")] if we're able to resolve the
-        //  issue making this fail
-        new PollingConditions(timeout: 5).eventually {
-            inMemoryPublisher.published().contains(
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            inMemoryPublisher.published() == [
                     new Data(id: 2, data: "stuff 2")
-            )
+            ]
         }
     }
 

@@ -15,4 +15,8 @@ class InMemoryPublishedDataStore implements Publisher {
     List<Data> published() {
         published.asImmutable()
     }
+
+    boolean empty() {
+        return published.isEmpty()
+    }
 }
