@@ -1,7 +1,8 @@
 package org.huwtl.pgrepl;
 
 import org.apache.logging.log4j.core.tools.picocli.CommandLine;
-import org.huwtl.pgrepl.consumer.PostgresDataChangeConsumer;
+import org.huwtl.pgrepl.consumer.DataChangeConsumer;
+import org.huwtl.pgrepl.consumer.PostgresReplicationStream;
 import org.huwtl.pgrepl.publisher.CountingPublisher;
 
 import java.sql.SQLException;
@@ -36,20 +37,22 @@ public class Application implements Runnable {
 
     @Override
     public void run() {
-        try (var postgresDataChangeConsumer = new PostgresDataChangeConsumer(
+        var databaseConfig = DatabaseConfiguration.builder()
+                .port(databasePort)
+                .host(databaseHost)
+                .database(databaseName)
+                .username(databaseUser)
+                .password(databasePassword)
+                .build();
+        ReplicationConfiguration replicationConfig = ReplicationConfiguration.builder()
+                .slotName(replicationSlotName)
+                .schemaNameToDetectChangesFrom(databaseSchemaNameToDetectChangesFrom)
+                .tableNameToDetectChangesFrom(databaseTableNameToDetectChangesFrom)
+                .build();
+        try (var postgresDataChangeConsumer = new DataChangeConsumer(
                 new CountingPublisher(),
-                DatabaseConfiguration.builder()
-                        .port(databasePort)
-                        .host(databaseHost)
-                        .database(databaseName)
-                        .username(databaseUser)
-                        .password(databasePassword)
-                        .build(),
-                ReplicationConfiguration.builder()
-                        .slotName(replicationSlotName)
-                        .schemaNameToDetectChangesFrom(databaseSchemaNameToDetectChangesFrom)
-                        .tableNameToDetectChangesFrom(databaseTableNameToDetectChangesFrom)
-                        .build()
+                replicationConfig,
+                () -> new PostgresReplicationStream(databaseConfig, replicationConfig)
         )) {
             postgresDataChangeConsumer.start().get();
         } catch (SQLException | ExecutionException | InterruptedException e) {

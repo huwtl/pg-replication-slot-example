@@ -13,7 +13,7 @@ import spock.lang.Specification
 import spock.lang.Unroll
 import spock.util.concurrent.PollingConditions
 
-class PostgresDataChangeConsumerTest extends Specification {
+class DataChangeConsumerIntegrationTest extends Specification {
     private static final String SCHEMA_NAME = "replication_test"
     private static final String TABLE_NAME = "events"
     private static final String REPLICATION_SLOT_NAME = "replication_test"
@@ -33,9 +33,6 @@ class PostgresDataChangeConsumerTest extends Specification {
     @AutoCleanup
     private EmbeddedPostgresContainer database
     @Shared
-    @AutoCleanup
-    private PostgresDataChangeConsumer consumer
-    @Shared
     private InMemoryPublishedDataStore inMemoryPublisher
     @Shared
     private ExceptionThrowingPublisher exceptionThrowingPublisher
@@ -43,6 +40,9 @@ class PostgresDataChangeConsumerTest extends Specification {
     private DatabaseConfiguration databaseConfig
     @Shared
     private ReplicationConfiguration replicationConfig
+
+    @AutoCleanup
+    private DataChangeConsumer consumer
 
     def setupSpec() {
         database = new EmbeddedPostgresContainer()
@@ -62,6 +62,9 @@ class PostgresDataChangeConsumerTest extends Specification {
                 .statusIntervalInMillis(1)
                 .pollingIntervalInMillis(1)
                 .build()
+    }
+
+    def setup() {
         consumer = startedConsumer()
     }
 
@@ -69,6 +72,7 @@ class PostgresDataChangeConsumerTest extends Specification {
         sql.execute(DELETE_ALL_SQL)
         inMemoryPublisher.reset()
         exceptionThrowingPublisher.reset()
+        consumer.close()
     }
 
     def cleanupSpec() {
@@ -104,15 +108,6 @@ class PostgresDataChangeConsumerTest extends Specification {
 
     def "does not miss publishing changed data that failed to be published"() {
         given:
-        sql.executeInsert(INSERT_SQL, [1, "stuff"])
-        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
-            assert inMemoryPublisher.published() == [
-                    new Data(id: 1, data: "stuff")
-            ]
-        }
-        inMemoryPublisher.reset()
-
-        and:
         exceptionThrowingPublisher.willThrowException()
         sql.executeInsert(INSERT_SQL, [2, "stuff 2"])
 
@@ -159,8 +154,35 @@ class PostgresDataChangeConsumerTest extends Specification {
         }
     }
 
-    private PostgresDataChangeConsumer startedConsumer() {
-        new PostgresDataChangeConsumer(exceptionThrowingPublisher, databaseConfig, replicationConfig).tap {
+    def "executing multiple consumers provides failover"() {
+        given:
+        def firstConsumer = consumer
+        def secondConsumer = startedConsumer()
+
+        and:
+        firstConsumer.close()
+
+        expect:
+        inMemoryPublisher.empty()
+
+        when:
+        sql.executeInsert(INSERT_SQL, [1, "some data 1"])
+
+        then:
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            inMemoryPublisher.published() == [new Data(id: 1, data: "some data 1")]
+        }
+
+        cleanup:
+        secondConsumer.close()
+    }
+
+    private DataChangeConsumer startedConsumer() {
+        new DataChangeConsumer(
+                exceptionThrowingPublisher,
+                replicationConfig,
+                { new PostgresReplicationStream(databaseConfig, replicationConfig) }
+        ).tap {
             it.start()
         }
     }

@@ -1,7 +1,9 @@
 package org.huwtl.pgrepl.consumer;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.Logger;
 import org.huwtl.pgrepl.DatabaseConfiguration;
+import org.huwtl.pgrepl.ObjectMapperFactory;
 import org.huwtl.pgrepl.ReplicationConfiguration;
 import org.postgresql.PGConnection;
 import org.postgresql.replication.LogSequenceNumber;
@@ -9,24 +11,28 @@ import org.postgresql.replication.PGReplicationConnection;
 import org.postgresql.replication.PGReplicationStream;
 import org.postgresql.util.PSQLException;
 
-import java.nio.ByteBuffer;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Properties;
+import java.util.function.Consumer;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.logging.log4j.LogManager.getLogger;
+import static org.huwtl.pgrepl.consumer.ReplicationStreamMessage.ChangeDataCaptureMessage;
+import static org.huwtl.pgrepl.consumer.ReplicationStreamMessage.NoMessage;
 
-class PostgresConnector implements AutoCloseable {
+public class PostgresReplicationStream implements ReplicationStream {
     private static final Logger LOGGER = getLogger();
     private static final String ALREADY_EXISTS_SQL_STATE = "42710";
     private static final String CURRENTLY_RUNNING_PROCESS_ON_SLOT_SQL_STATE = "55006";
 
     private final Connection replicationConnection;
     private final PGReplicationStream replicationStream;
+    private final ObjectMapper objectMapper;
 
-    PostgresConnector(DatabaseConfiguration postgresConfig, ReplicationConfiguration replicationConfig)
+    public PostgresReplicationStream(DatabaseConfiguration postgresConfig, ReplicationConfiguration replicationConfig)
             throws SQLException {
         LOGGER.info("Connecting to {}", postgresConfig.jdbcUrl());
         replicationConnection = newConnection(postgresConfig.jdbcUrl(), postgresConfig.replicationProperties());
@@ -36,19 +42,29 @@ class PostgresConnector implements AutoCloseable {
                 .getReplicationAPI();
         createReplicationSlot(replicationConfig, postgresReplicationApi);
         replicationStream = replicationStream(replicationConfig, postgresReplicationApi);
+        objectMapper = ObjectMapperFactory.objectMapper();
     }
 
-    ByteBuffer readPending() throws SQLException {
-        return replicationStream.readPending();
-    }
-
-    LogSequenceNumber lastReceivedLogSequenceNumber() {
-        return replicationStream.getLastReceiveLSN();
-    }
-
-    void updateLogSequenceNumber(LogSequenceNumber logSequenceNumber) {
-        replicationStream.setAppliedLSN(logSequenceNumber);
-        replicationStream.setFlushedLSN(logSequenceNumber);
+    @Override
+    public void processNextChangeDataCaptureMessage(
+            Consumer<ChangeDataCaptureMessage> onChangeDataCaptureMessage,
+            Consumer<NoMessage> onNoMessage) throws SQLException, IOException {
+        var oldLsn = lastReceivedLogSequenceNumber();
+        var buffer = replicationStream.readPending();
+        var newLsn = lastReceivedLogSequenceNumber();
+        if (buffer != null) {
+            var offset = buffer.arrayOffset();
+            var bytes = buffer.array();
+            var slotMessage = objectMapper.readValue(bytes, offset, bytes.length, SlotMessage.class);
+            LOGGER.info("pending changes received {} with lsn {}", slotMessage, newLsn);
+            onChangeDataCaptureMessage.accept(slotMessage);
+            updateLogSequenceNumber(newLsn);
+        } else if (!newLsn.equals(oldLsn)) {
+            LOGGER.info("keepalive message received with lsn {}", newLsn);
+            updateLogSequenceNumber(newLsn);
+        } else {
+            onNoMessage.accept(new NoMessage());
+        }
     }
 
     @Override
@@ -70,6 +86,15 @@ class PostgresConnector implements AutoCloseable {
         } catch (SQLException e) {
             LOGGER.error("Unable to close postgres streaming connection", e);
         }
+    }
+
+    private LogSequenceNumber lastReceivedLogSequenceNumber() {
+        return replicationStream.getLastReceiveLSN();
+    }
+
+    private void updateLogSequenceNumber(LogSequenceNumber logSequenceNumber) {
+        replicationStream.setAppliedLSN(logSequenceNumber);
+        replicationStream.setFlushedLSN(logSequenceNumber);
     }
 
     private void createReplicationSlot(
