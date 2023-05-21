@@ -1,6 +1,6 @@
-package org.huwtl.pgrepl.consumer
+package org.huwtl.pgrepl.application.services
 
-class FakeDelayService implements DelayService {
+class SpyingZeroDelayService implements DelayService {
     private List<Long> delayTimesApplied = []
     private boolean willBeInterrupted = false
     private int numberOfTimesInterrupted = 0

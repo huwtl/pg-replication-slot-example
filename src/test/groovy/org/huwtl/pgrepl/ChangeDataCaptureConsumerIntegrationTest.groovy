@@ -1,19 +1,19 @@
-package org.huwtl.pgrepl.consumer
+package org.huwtl.pgrepl
 
 import groovy.sql.Sql
-import org.huwtl.pgrepl.DatabaseConfiguration
-import org.huwtl.pgrepl.ReplicationConfiguration
-import org.huwtl.pgrepl.db.EmbeddedPostgresContainer
-import org.huwtl.pgrepl.publisher.Data
-import org.huwtl.pgrepl.publisher.ExceptionThrowingPublisher
-import org.huwtl.pgrepl.publisher.InMemoryPublishedDataStore
+import org.huwtl.pgrepl.application.services.consumer.ChangeDataCaptureConsumer
+import org.huwtl.pgrepl.infrastructure.postgres.EmbeddedPostgresContainer
+import org.huwtl.pgrepl.infrastructure.postgres.PostgresReplicationStream
+import org.huwtl.pgrepl.application.services.publisher.Data
+import org.huwtl.pgrepl.application.services.publisher.ExceptionThrowingPublisher
+import org.huwtl.pgrepl.application.services.publisher.InMemoryPublishedDataStore
 import spock.lang.AutoCleanup
 import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Unroll
 import spock.util.concurrent.PollingConditions
 
-class DataChangeConsumerIntegrationTest extends Specification {
+class ChangeDataCaptureConsumerIntegrationTest extends Specification {
     private static final String SCHEMA_NAME = "replication_test"
     private static final String TABLE_NAME = "events"
     private static final String REPLICATION_SLOT_NAME = "replication_test"
@@ -42,7 +42,7 @@ class DataChangeConsumerIntegrationTest extends Specification {
     private ReplicationConfiguration replicationConfig
 
     @AutoCleanup
-    private DataChangeConsumer consumer
+    private ChangeDataCaptureConsumer consumer
 
     def setupSpec() {
         database = new EmbeddedPostgresContainer()
@@ -177,8 +177,8 @@ class DataChangeConsumerIntegrationTest extends Specification {
         secondConsumer.close()
     }
 
-    private DataChangeConsumer startedConsumer() {
-        new DataChangeConsumer(
+    private ChangeDataCaptureConsumer startedConsumer() {
+        new ChangeDataCaptureConsumer(
                 exceptionThrowingPublisher,
                 replicationConfig,
                 { new PostgresReplicationStream(databaseConfig, replicationConfig) }

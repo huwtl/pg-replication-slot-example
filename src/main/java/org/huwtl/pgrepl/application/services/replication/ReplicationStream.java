@@ -1,4 +1,4 @@
-package org.huwtl.pgrepl.consumer;
+package org.huwtl.pgrepl.application.services.replication;
 
 import java.io.IOException;
 import java.sql.SQLException;

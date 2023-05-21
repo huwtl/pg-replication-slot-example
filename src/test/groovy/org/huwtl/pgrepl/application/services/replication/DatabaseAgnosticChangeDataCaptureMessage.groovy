@@ -1,9 +1,9 @@
-package org.huwtl.pgrepl.consumer
+package org.huwtl.pgrepl.application.services.replication
 
 import groovy.transform.Canonical
-import org.huwtl.pgrepl.publisher.Data
+import org.huwtl.pgrepl.application.services.publisher.Data
 
-import static org.huwtl.pgrepl.consumer.ReplicationStreamMessage.ChangeDataCaptureMessage
+import static org.huwtl.pgrepl.application.services.replication.ReplicationStreamMessage.ChangeDataCaptureMessage
 
 @Canonical
 class DatabaseAgnosticChangeDataCaptureMessage implements ChangeDataCaptureMessage {

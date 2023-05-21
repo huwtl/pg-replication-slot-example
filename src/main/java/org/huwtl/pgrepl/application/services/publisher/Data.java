@@ -1,4 +1,4 @@
-package org.huwtl.pgrepl.publisher;
+package org.huwtl.pgrepl.application.services.publisher;
 
 import java.util.Map;
 

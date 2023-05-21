@@ -1,4 +1,4 @@
-package org.huwtl.pgrepl.db
+package org.huwtl.pgrepl.infrastructure.postgres
 
 import groovy.sql.Sql
 import org.huwtl.pgrepl.DatabaseConfiguration

@@ -1,4 +1,4 @@
-package org.huwtl.pgrepl.consumer
+package org.huwtl.pgrepl.application.services
 
 import java.util.concurrent.AbstractExecutorService
 import java.util.concurrent.TimeUnit

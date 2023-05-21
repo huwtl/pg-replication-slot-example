@@ -1,10 +1,10 @@
-package org.huwtl.pgrepl.consumer;
+package org.huwtl.pgrepl.application.services.replication;
 
-import org.huwtl.pgrepl.publisher.Data;
+import org.huwtl.pgrepl.application.services.publisher.Data;
 
 import java.util.List;
 
-interface ReplicationStreamMessage {
+public interface ReplicationStreamMessage {
     interface ChangeDataCaptureMessage extends ReplicationStreamMessage {
         List<Data> filterInsertsBySchemaAndTable(String schema, String table);
     }

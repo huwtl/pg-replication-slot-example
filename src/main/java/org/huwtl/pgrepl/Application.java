@@ -1,9 +1,9 @@
 package org.huwtl.pgrepl;
 
 import org.apache.logging.log4j.core.tools.picocli.CommandLine;
-import org.huwtl.pgrepl.consumer.DataChangeConsumer;
-import org.huwtl.pgrepl.consumer.PostgresReplicationStream;
-import org.huwtl.pgrepl.publisher.CountingPublisher;
+import org.huwtl.pgrepl.application.services.consumer.ChangeDataCaptureConsumer;
+import org.huwtl.pgrepl.application.services.publisher.CountingPublisher;
+import org.huwtl.pgrepl.infrastructure.postgres.PostgresReplicationStream;
 
 import java.sql.SQLException;
 import java.util.concurrent.ExecutionException;
@@ -12,23 +12,23 @@ import static org.apache.logging.log4j.core.tools.picocli.CommandLine.Command;
 import static org.apache.logging.log4j.core.tools.picocli.CommandLine.Option;
 
 @SuppressWarnings("unused")
-@Command(name = "Postgres replication test")
+@Command(name = "Postgres replication test application")
 public class Application implements Runnable {
-    @Option(names = "-port", required = true, description = "database port")
+    @Option(names = "--port", required = true, description = "database port")
     private String databasePort;
-    @Option(names = "-host", required = true, description = "database host")
+    @Option(names = "--host", required = true, description = "database host")
     private String databaseHost;
-    @Option(names = "-database", required = true, description = "database name")
+    @Option(names = "--database", required = true, description = "database name")
     private String databaseName;
-    @Option(names = "-user", required = true, description = "database user")
+    @Option(names = "--user", required = true, description = "database user")
     private String databaseUser;
-    @Option(names = "-password", required = true, description = "database password")
+    @Option(names = "--password", required = true, description = "database password")
     private String databasePassword;
-    @Option(names = "-slot", required = true, description = "replication slot name")
+    @Option(names = "--slot", required = true, description = "replication slot name")
     private String replicationSlotName;
-    @Option(names = "-schema", required = true, description = "database schema to detect changes from")
+    @Option(names = "--schema", required = true, description = "database schema to detect changes from")
     private String databaseSchemaNameToDetectChangesFrom;
-    @Option(names = "-table", required = true, description = "database table to detect changes from")
+    @Option(names = "--table", required = true, description = "database table to detect changes from")
     private String databaseTableNameToDetectChangesFrom;
 
     public static void main(String[] args) {
@@ -49,12 +49,12 @@ public class Application implements Runnable {
                 .schemaNameToDetectChangesFrom(databaseSchemaNameToDetectChangesFrom)
                 .tableNameToDetectChangesFrom(databaseTableNameToDetectChangesFrom)
                 .build();
-        try (var postgresDataChangeConsumer = new DataChangeConsumer(
+        try (var changeDataCaptureConsumer = new ChangeDataCaptureConsumer(
                 new CountingPublisher(),
                 replicationConfig,
                 () -> new PostgresReplicationStream(databaseConfig, replicationConfig)
         )) {
-            postgresDataChangeConsumer.start().get();
+            changeDataCaptureConsumer.start().get();
         } catch (SQLException | ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
         }

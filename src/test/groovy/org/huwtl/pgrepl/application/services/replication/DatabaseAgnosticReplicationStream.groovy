@@ -1,10 +1,10 @@
-package org.huwtl.pgrepl.consumer
+package org.huwtl.pgrepl.application.services.replication
 
 import java.sql.SQLException
 import java.util.function.Consumer
 
-import static org.huwtl.pgrepl.consumer.ReplicationStreamMessage.ChangeDataCaptureMessage
-import static org.huwtl.pgrepl.consumer.ReplicationStreamMessage.NoMessage
+import static org.huwtl.pgrepl.application.services.replication.ReplicationStreamMessage.ChangeDataCaptureMessage
+import static org.huwtl.pgrepl.application.services.replication.ReplicationStreamMessage.NoMessage
 
 class DatabaseAgnosticReplicationStream implements ReplicationStream {
     private final List<ReplicationStreamMessage> nextMessages = []

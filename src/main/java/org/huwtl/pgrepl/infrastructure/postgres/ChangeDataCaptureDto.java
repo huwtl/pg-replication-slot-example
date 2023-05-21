@@ -1,17 +1,17 @@
-package org.huwtl.pgrepl.consumer;
+package org.huwtl.pgrepl.infrastructure.postgres;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import org.huwtl.pgrepl.publisher.Data;
+import org.huwtl.pgrepl.application.services.publisher.Data;
 
 import java.util.List;
 import java.util.Map;
 
 import static java.util.stream.Collectors.toMap;
 import static java.util.stream.IntStream.range;
-import static org.huwtl.pgrepl.consumer.Change.ChangeToIgnore;
-import static org.huwtl.pgrepl.consumer.Change.InsertChange;
+import static org.huwtl.pgrepl.infrastructure.postgres.ChangeDataCaptureDto.ChangeToIgnore;
+import static org.huwtl.pgrepl.infrastructure.postgres.ChangeDataCaptureDto.InsertChange;
 
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
@@ -23,7 +23,7 @@ import static org.huwtl.pgrepl.consumer.Change.InsertChange;
 @JsonSubTypes({
         @JsonSubTypes.Type(value = InsertChange.class, name = InsertChange.TYPE),
 })
-interface Change {
+interface ChangeDataCaptureDto {
     String type();
 
     String schema();
@@ -64,7 +64,7 @@ interface Change {
             @JsonProperty(value = "columnvalues", required = true)
             List<Object> columnValues,
             @JsonProperty(value = "columnnames", required = true)
-            List<String> columnNames) implements Change {
+            List<String> columnNames) implements ChangeDataCaptureDto {
         static final String TYPE = "insert";
     }
 
@@ -74,7 +74,7 @@ interface Change {
             @JsonProperty(required = true)
             String schema,
             @JsonProperty(required = true)
-            String table) implements Change {
+            String table) implements ChangeDataCaptureDto {
         @Override
         public List<String> columnNames() {
             return List.of();

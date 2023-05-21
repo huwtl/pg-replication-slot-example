@@ -1,8 +1,12 @@
-package org.huwtl.pgrepl.consumer;
+package org.huwtl.pgrepl.application.services.consumer;
 
 import org.apache.logging.log4j.Logger;
 import org.huwtl.pgrepl.ReplicationConfiguration;
-import org.huwtl.pgrepl.publisher.Publisher;
+import org.huwtl.pgrepl.application.services.DelayService;
+import org.huwtl.pgrepl.application.services.ThreadSleepingService;
+import org.huwtl.pgrepl.application.services.publisher.Publisher;
+import org.huwtl.pgrepl.application.services.replication.ReplicationStream;
+import org.huwtl.pgrepl.application.services.replication.ReplicationStreamProvider;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -15,7 +19,7 @@ import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.logging.log4j.LogManager.getLogger;
 
-public class DataChangeConsumer implements AutoCloseable {
+public class ChangeDataCaptureConsumer implements AutoCloseable {
     private static final Logger LOGGER = getLogger();
     private static final int SHUTDOWN_TIMEOUT_IN_SECONDS = 5;
 
@@ -25,7 +29,7 @@ public class DataChangeConsumer implements AutoCloseable {
     private final ExecutorService executorService;
     private final DelayService delayService;
 
-    public DataChangeConsumer(
+    public ChangeDataCaptureConsumer(
             Publisher publisher,
             ReplicationConfiguration replicationConfig,
             ReplicationStreamProvider replicationStreamProvider) throws SQLException {
@@ -38,7 +42,7 @@ public class DataChangeConsumer implements AutoCloseable {
         );
     }
 
-    DataChangeConsumer(
+    ChangeDataCaptureConsumer(
             Publisher publisher,
             ReplicationConfiguration replicationConfig,
             ReplicationStreamProvider replicationStreamProvider,

@@ -1,4 +1,7 @@
-package org.huwtl.pgrepl.publisher
+package org.huwtl.pgrepl.application.services.publisher
+
+import org.huwtl.pgrepl.application.services.publisher.Data
+import org.huwtl.pgrepl.application.services.publisher.Publisher
 
 class InMemoryPublishedDataStore implements Publisher {
     private final List<Data> published = []

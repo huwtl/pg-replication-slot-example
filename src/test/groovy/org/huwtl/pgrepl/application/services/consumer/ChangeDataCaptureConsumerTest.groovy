@@ -1,17 +1,22 @@
-package org.huwtl.pgrepl.consumer
+package org.huwtl.pgrepl.application.services.consumer
 
 import org.huwtl.pgrepl.ReplicationConfiguration
-import org.huwtl.pgrepl.publisher.Data
-import org.huwtl.pgrepl.publisher.ExceptionThrowingPublisher
-import org.huwtl.pgrepl.publisher.InMemoryPublishedDataStore
+import org.huwtl.pgrepl.application.services.SpyingZeroDelayService
+import org.huwtl.pgrepl.application.services.SynchronousExecutionService
+import org.huwtl.pgrepl.application.services.replication.DatabaseAgnosticChangeDataCaptureMessage
+import org.huwtl.pgrepl.application.services.replication.DatabaseAgnosticReplicationStream
+import org.huwtl.pgrepl.application.services.replication.ReplicationStreamProvider
+import org.huwtl.pgrepl.application.services.publisher.Data
+import org.huwtl.pgrepl.application.services.publisher.ExceptionThrowingPublisher
+import org.huwtl.pgrepl.application.services.publisher.InMemoryPublishedDataStore
 import spock.lang.AutoCleanup
 import spock.lang.Specification
 import spock.lang.Unroll
 import spock.util.concurrent.PollingConditions
 
-import static org.huwtl.pgrepl.consumer.ReplicationStreamMessage.NoMessage
+import static org.huwtl.pgrepl.application.services.replication.ReplicationStreamMessage.NoMessage
 
-class DataChangeConsumerTest extends Specification {
+class ChangeDataCaptureConsumerTest extends Specification {
     private static final SCHEMA_OF_INTEREST = "test_schema"
     private static final TABLE_OF_INTEREST = "test_table"
     private static final POLLING_INTERVAL_IN_MILLIS = 100 as long
@@ -21,10 +26,10 @@ class DataChangeConsumerTest extends Specification {
     private def replicationStream = new DatabaseAgnosticReplicationStream()
     private def replicationStreamProvider = { replicationStream } as ReplicationStreamProvider
     private def executorService = new SynchronousExecutionService()
-    private def delayService = new FakeDelayService()
+    private def delayService = new SpyingZeroDelayService()
 
     @AutoCleanup
-    private def consumer = new DataChangeConsumer(
+    private def consumer = new ChangeDataCaptureConsumer(
             exceptionThrowingPublisher,
             ReplicationConfiguration.builder()
                     .slotName("any")

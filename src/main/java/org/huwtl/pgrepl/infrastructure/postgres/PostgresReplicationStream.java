@@ -1,10 +1,11 @@
-package org.huwtl.pgrepl.consumer;
+package org.huwtl.pgrepl.infrastructure.postgres;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.Logger;
-import org.huwtl.pgrepl.DatabaseConfiguration;
 import org.huwtl.pgrepl.ObjectMapperFactory;
 import org.huwtl.pgrepl.ReplicationConfiguration;
+import org.huwtl.pgrepl.DatabaseConfiguration;
+import org.huwtl.pgrepl.application.services.replication.ReplicationStream;
 import org.postgresql.PGConnection;
 import org.postgresql.replication.LogSequenceNumber;
 import org.postgresql.replication.PGReplicationConnection;
@@ -20,8 +21,8 @@ import java.util.function.Consumer;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.logging.log4j.LogManager.getLogger;
-import static org.huwtl.pgrepl.consumer.ReplicationStreamMessage.ChangeDataCaptureMessage;
-import static org.huwtl.pgrepl.consumer.ReplicationStreamMessage.NoMessage;
+import static org.huwtl.pgrepl.application.services.replication.ReplicationStreamMessage.ChangeDataCaptureMessage;
+import static org.huwtl.pgrepl.application.services.replication.ReplicationStreamMessage.NoMessage;
 
 public class PostgresReplicationStream implements ReplicationStream {
     private static final Logger LOGGER = getLogger();
@@ -55,7 +56,12 @@ public class PostgresReplicationStream implements ReplicationStream {
         if (buffer != null) {
             var offset = buffer.arrayOffset();
             var bytes = buffer.array();
-            var slotMessage = objectMapper.readValue(bytes, offset, bytes.length, SlotMessage.class);
+            var slotMessage = objectMapper.readValue(
+                    bytes,
+                    offset,
+                    bytes.length,
+                    ReplicationSlotMessageDto.class
+            );
             LOGGER.info("pending changes received {} with lsn {}", slotMessage, newLsn);
             onChangeDataCaptureMessage.accept(slotMessage);
             updateLogSequenceNumber(newLsn);

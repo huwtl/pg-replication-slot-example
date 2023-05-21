@@ -1,22 +1,23 @@
-package org.huwtl.pgrepl.consumer;
+package org.huwtl.pgrepl.infrastructure.postgres;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.huwtl.pgrepl.publisher.Data;
+import org.huwtl.pgrepl.application.services.publisher.Data;
+import org.huwtl.pgrepl.application.services.replication.ReplicationStreamMessage;
 
 import java.util.List;
 
-record SlotMessage(
+record ReplicationSlotMessageDto(
         @JsonProperty(required = true)
         long xid,
         @JsonProperty(value = "change", required = true)
-        List<Change> changes) implements ReplicationStreamMessage.ChangeDataCaptureMessage {
+        List<ChangeDataCaptureDto> changes) implements ReplicationStreamMessage.ChangeDataCaptureMessage {
     @Override
     public List<Data> filterInsertsBySchemaAndTable(String schema, String table) {
         return changes.stream()
-                .filter(Change::insertTypeChange)
+                .filter(ChangeDataCaptureDto::insertTypeChange)
                 .filter(change -> change.fromSchema(schema))
                 .filter(change -> change.fromTable(table))
-                .map(Change::rowData)
+                .map(ChangeDataCaptureDto::rowData)
                 .toList();
     }
 }
