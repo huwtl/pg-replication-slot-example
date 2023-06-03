@@ -1,9 +1,9 @@
-package org.huwtl.pgrepl
+package org.huwtl.pgrepl.infrastructure.postgres
 
 import groovy.sql.Sql
+import org.huwtl.pgrepl.DatabaseConfiguration
+import org.huwtl.pgrepl.ReplicationConfiguration
 import org.huwtl.pgrepl.application.services.consumer.ChangeDataCaptureConsumer
-import org.huwtl.pgrepl.infrastructure.postgres.EmbeddedPostgresContainer
-import org.huwtl.pgrepl.infrastructure.postgres.PostgresReplicationStream
 import org.huwtl.pgrepl.application.services.publisher.Data
 import org.huwtl.pgrepl.application.services.publisher.ExceptionThrowingPublisher
 import org.huwtl.pgrepl.application.services.publisher.InMemoryPublishedDataStore
@@ -13,7 +13,7 @@ import spock.lang.Specification
 import spock.lang.Unroll
 import spock.util.concurrent.PollingConditions
 
-class ChangeDataCaptureConsumerIntegrationTest extends Specification {
+class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
     private static final String SCHEMA_NAME = "replication_test"
     private static final String TABLE_NAME = "events"
     private static final String REPLICATION_SLOT_NAME = "replication_test"
@@ -84,12 +84,13 @@ class ChangeDataCaptureConsumerIntegrationTest extends Specification {
         when:
         numberOfInserts.times {
             sql.executeInsert(INSERT_SQL, [it, "some data $it" as String])
-            sql.executeInsert(UPDATE_DATA_BY_ID_SQL, ["updated data $it" as String, it])
-            sql.executeInsert(DELETE_BY_ID_SQL, it)
+            sql.executeUpdate(UPDATE_DATA_BY_ID_SQL, ["updated data $it" as String, it])
+            sql.execute(DELETE_BY_ID_SQL, it)
         }
 
         then:
         new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            walBytesRemainingToConsume() == 0
             inMemoryPublisher.published() == published
         }
 
@@ -122,6 +123,7 @@ class ChangeDataCaptureConsumerIntegrationTest extends Specification {
 
         then:
         new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            walBytesRemainingToConsume() == 0
             inMemoryPublisher.published() == [
                     new Data(id: 2, data: "stuff 2")
             ]
@@ -135,7 +137,7 @@ class ChangeDataCaptureConsumerIntegrationTest extends Specification {
 
         and:
         new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
-            assert exceptionThrowingPublisher.hasThrownException()
+            exceptionThrowingPublisher.hasThrownException()
         }
 
         and:
@@ -148,6 +150,7 @@ class ChangeDataCaptureConsumerIntegrationTest extends Specification {
 
         then:
         new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            walBytesRemainingToConsume() == 0
             inMemoryPublisher.published() == [
                     new Data(id: 1, data: "stuff")
             ]
@@ -170,11 +173,29 @@ class ChangeDataCaptureConsumerIntegrationTest extends Specification {
 
         then:
         new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            walBytesRemainingToConsume() == 0
             inMemoryPublisher.published() == [new Data(id: 1, data: "some data 1")]
         }
 
         cleanup:
         secondConsumer.close()
+    }
+
+    private int walBytesRemainingToConsume() {
+        def lsnValues = sql.firstRow(
+                """SELECT 
+                     pg_current_wal_lsn() AS current_lsn, 
+                     (SELECT confirmed_flush_lsn FROM pg_replication_slots WHERE slot_name = ?)""",
+                [REPLICATION_SLOT_NAME]
+        )
+        def currentLsn = lsnValues.current_lsn
+        def consumedLsn = lsnValues.confirmed_flush_lsn
+        println "Current LSN: ${currentLsn}, Consumed LSN: ${consumedLsn}"
+        def bytesRemaining = sql.firstRow(
+                "SELECT pg_wal_lsn_diff(?, ?) AS size_bytes", [currentLsn, consumedLsn]
+        ).size_bytes as Long
+        println("Bytes remaining to consume: $bytesRemaining")
+        bytesRemaining
     }
 
     private ChangeDataCaptureConsumer startedConsumer() {
