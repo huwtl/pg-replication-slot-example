@@ -24,6 +24,10 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
     private static final String UPDATE_DATA_BY_ID_SQL = "UPDATE ${TABLE_NAME} SET data = ? WHERE id = ?"
     private static final String DELETE_BY_ID_SQL = "DELETE FROM ${TABLE_NAME} WHERE id = ?"
     private static final String DELETE_ALL_SQL = "DELETE FROM ${TABLE_NAME}"
+    private static final String OTHER_DATABASE_NAME = "replication_test_db_other"
+    private static final String OTHER_SCHEMA_NAME = "replication_test_other"
+    private static final String CREATE_OTHER_DATABASE_SQL = "CREATE DATABASE ${OTHER_DATABASE_NAME}"
+    private static final String CREATE_OTHER_SCHEMA_SQL = "CREATE SCHEMA ${OTHER_SCHEMA_NAME}"
     private static final int ASYNC_ASSERTION_TIMEOUT_IN_SECS = 5
 
     @Shared
@@ -48,10 +52,10 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
         database = new EmbeddedPostgresContainer()
         inMemoryPublisher = new InMemoryPublishedDataStore()
         exceptionThrowingPublisher = ExceptionThrowingPublisher.willNotThrowException(inMemoryPublisher)
-        database.sql().tap {
+        database.sqlForDefaultDatabaseAndSchema().tap {
             it.execute(CREATE_SCHEMA_SQL)
         }
-        sql = database.sqlForSchema(SCHEMA_NAME).tap {
+        sql = database.sqlForDefaultDatabaseAndCustomSchema(SCHEMA_NAME).tap {
             it.execute(CREATE_TABLE_SQL)
         }
         databaseConfig = database.configuration()
@@ -179,6 +183,50 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
 
         cleanup:
         secondConsumer.close()
+    }
+
+    def "change data capture messages from other schemas of the same database are consumed but not published"() {
+        given:
+        sql.execute(CREATE_OTHER_SCHEMA_SQL)
+        def sqlForOtherSchema = database.sqlForDefaultDatabaseAndCustomSchema(OTHER_SCHEMA_NAME).tap {
+            it.execute(CREATE_TABLE_SQL)
+        }
+
+        when:
+        10.times {
+            sqlForOtherSchema.executeInsert(INSERT_SQL, [it, "stuff $it" as String])
+        }
+
+        then:
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            walBytesRemainingToConsume() == 0
+            inMemoryPublisher.empty()
+        }
+
+        cleanup:
+        sqlForOtherSchema.close()
+    }
+
+    def "consumer LSN position remains up-to-date (via keepalive messages) during activity in other database"() {
+        given:
+        sql.execute(CREATE_OTHER_DATABASE_SQL)
+        def sqlForOtherDatabase = database.sqlForCustomDatabaseAndDefaultSchema(OTHER_DATABASE_NAME).tap {
+            it.execute(CREATE_TABLE_SQL)
+        }
+
+        when:
+        10.times {
+            sqlForOtherDatabase.executeInsert(INSERT_SQL, [it, "stuff $it" as String])
+        }
+
+        then:
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            walBytesRemainingToConsume() == 0
+            inMemoryPublisher.empty()
+        }
+
+        cleanup:
+        sqlForOtherDatabase.close()
     }
 
     private int walBytesRemainingToConsume() {

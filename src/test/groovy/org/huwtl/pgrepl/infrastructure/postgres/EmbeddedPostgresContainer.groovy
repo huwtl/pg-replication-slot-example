@@ -30,12 +30,17 @@ class EmbeddedPostgresContainer implements AutoCloseable {
         }
     }
 
-    Sql sql() {
+    Sql sqlForDefaultDatabaseAndSchema() {
         new Sql(getConnection(jdbcUrlForDefaultSchema(), USER, PASSWORD))
     }
 
-    Sql sqlForSchema(String schema) {
+    Sql sqlForDefaultDatabaseAndCustomSchema(String schema) {
         new Sql(getConnection(jdbcUrlForSchema(schema), USER, PASSWORD))
+    }
+
+    Sql sqlForCustomDatabaseAndDefaultSchema(String databaseName) {
+        def jdbcUrl = "jdbc:postgresql://${host()}:${port()}/$databaseName"
+        new Sql(getConnection(jdbcUrl, USER, PASSWORD))
     }
 
     String host() {
