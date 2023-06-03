@@ -6,7 +6,7 @@ import java.util.List;
 
 public interface ReplicationStreamMessage {
     interface ChangeDataCaptureMessage extends ReplicationStreamMessage {
-        List<Data> filterInsertsBySchemaAndTable(String schema, String table);
+        List<Data> capturedDataFromInserts(String schema, String table);
     }
 
     record NoMessage() implements ReplicationStreamMessage {

@@ -100,8 +100,7 @@ public class ChangeDataCaptureConsumer implements AutoCloseable {
 
     private void consumeAndPublishNextChange(ReplicationStream replicationStream) throws SQLException, IOException {
         replicationStream.processNextChangeDataCaptureMessage(
-                changeDataCaptureMessage -> changeDataCaptureMessage
-                        .filterInsertsBySchemaAndTable(
+                changeDataCaptureMessage -> changeDataCaptureMessage.capturedDataFromInserts(
                                 replicationConfig.schemaNameToDetectChangesFrom(),
                                 replicationConfig.tableNameToDetectChangesFrom()
                         )

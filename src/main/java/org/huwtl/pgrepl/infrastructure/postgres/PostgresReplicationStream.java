@@ -6,6 +6,7 @@ import org.huwtl.pgrepl.ObjectMapperFactory;
 import org.huwtl.pgrepl.ReplicationConfiguration;
 import org.huwtl.pgrepl.DatabaseConfiguration;
 import org.huwtl.pgrepl.application.services.replication.ReplicationStream;
+import org.huwtl.pgrepl.infrastructure.wal2json.ReplicationSlotMessageDto;
 import org.postgresql.PGConnection;
 import org.postgresql.replication.LogSequenceNumber;
 import org.postgresql.replication.PGReplicationConnection;

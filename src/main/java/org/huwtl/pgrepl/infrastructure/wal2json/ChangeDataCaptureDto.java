@@ -1,4 +1,4 @@
-package org.huwtl.pgrepl.infrastructure.postgres;
+package org.huwtl.pgrepl.infrastructure.wal2json;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -10,8 +10,8 @@ import java.util.Map;
 
 import static java.util.stream.Collectors.toMap;
 import static java.util.stream.IntStream.range;
-import static org.huwtl.pgrepl.infrastructure.postgres.ChangeDataCaptureDto.ChangeToIgnore;
-import static org.huwtl.pgrepl.infrastructure.postgres.ChangeDataCaptureDto.InsertChange;
+import static org.huwtl.pgrepl.infrastructure.wal2json.ChangeDataCaptureDto.ChangeToIgnore;
+import static org.huwtl.pgrepl.infrastructure.wal2json.ChangeDataCaptureDto.InsertChange;
 
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
@@ -61,10 +61,10 @@ interface ChangeDataCaptureDto {
             String schema,
             @JsonProperty(required = true)
             String table,
-            @JsonProperty(value = "columnvalues", required = true)
-            List<Object> columnValues,
             @JsonProperty(value = "columnnames", required = true)
-            List<String> columnNames) implements ChangeDataCaptureDto {
+            List<String> columnNames,
+            @JsonProperty(value = "columnvalues", required = true)
+            List<Object> columnValues) implements ChangeDataCaptureDto {
         static final String TYPE = "insert";
     }
 

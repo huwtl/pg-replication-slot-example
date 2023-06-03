@@ -12,7 +12,7 @@ class DatabaseAgnosticChangeDataCaptureMessage implements ChangeDataCaptureMessa
     List<Data> data
 
     @Override
-    List<Data> filterInsertsBySchemaAndTable(String schema, String table) {
+    List<Data> capturedDataFromInserts(String schema, String table) {
         (this.schema == schema && this.table == table) ? data : []
     }
 }
