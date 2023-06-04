@@ -19,6 +19,7 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
     private static final String REPLICATION_SLOT_NAME = "replication_test"
     private static final String CREATE_SCHEMA_SQL = "CREATE SCHEMA ${SCHEMA_NAME}"
     private static final String DROP_SCHEMA_SQL = "DROP SCHEMA ${SCHEMA_NAME} CASCADE"
+    private static final String DROP_REPLICATION_SLOT = "SELECT pg_drop_replication_slot(?)"
     private static final String CREATE_TABLE_SQL = "CREATE TABLE ${TABLE_NAME}(id INT PRIMARY KEY, data TEXT NOT NULL)"
     private static final String INSERT_SQL = "INSERT INTO ${TABLE_NAME}(id, data) VALUES(?, ?)"
     private static final String UPDATE_DATA_BY_ID_SQL = "UPDATE ${TABLE_NAME} SET data = ? WHERE id = ?"
@@ -77,6 +78,7 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
         inMemoryPublisher.reset()
         exceptionThrowingPublisher.reset()
         consumer.close()
+        sql.execute(DROP_REPLICATION_SLOT, [REPLICATION_SLOT_NAME])
     }
 
     def cleanupSpec() {
@@ -229,6 +231,10 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
         sqlForOtherDatabase.close()
     }
 
+    private boolean replicationSlotDoesNotExist() {
+        sql.rows("SELECT * FROM pg_replication_slots WHERE slot_name = ?", [REPLICATION_SLOT_NAME]).size() == 0
+    }
+
     private int walBytesRemainingToConsume() {
         def lsnValues = sql.firstRow(
                 """SELECT 
@@ -247,12 +253,16 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
     }
 
     private ChangeDataCaptureConsumer startedConsumer() {
-        new ChangeDataCaptureConsumer(
+        def consumer = new ChangeDataCaptureConsumer(
                 exceptionThrowingPublisher,
                 replicationConfig,
                 { new PostgresReplicationStream(databaseConfig, replicationConfig) }
         ).tap {
             it.start()
         }
+        while (replicationSlotDoesNotExist()) {
+            Thread.sleep(100)
+        }
+        consumer
     }
 }
