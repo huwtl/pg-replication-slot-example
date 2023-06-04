@@ -125,7 +125,7 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
         ]
     }
 
-    def "does not miss publishing changed data that failed to be published"() {
+    def "does not skip publishing changed data that failed to be published"() {
         given:
         exceptionThrowingPublisher.willThrowException()
         sql.executeInsert(INSERT_SQL, [2, "stuff 2"])
@@ -160,8 +160,10 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
 
         and:
         consumer.close()
-        inMemoryPublisher.reset()
         exceptionThrowingPublisher.willNotThrowException()
+
+        expect:
+        inMemoryPublisher.empty()
 
         when:
         consumer = startedConsumer()
