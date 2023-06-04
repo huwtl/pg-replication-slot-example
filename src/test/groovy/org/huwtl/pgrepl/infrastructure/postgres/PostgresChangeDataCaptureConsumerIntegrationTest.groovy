@@ -29,11 +29,17 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
     private static final String OTHER_SCHEMA_NAME = "replication_test_other"
     private static final String CREATE_OTHER_DATABASE_SQL = "CREATE DATABASE ${OTHER_DATABASE_NAME}"
     private static final String CREATE_OTHER_SCHEMA_SQL = "CREATE SCHEMA ${OTHER_SCHEMA_NAME}"
+    private static final String OTHER_TABLE_NAME = "events_other"
+    private static final String CREATE_OTHER_TABLE_SQL = "CREATE TABLE ${OTHER_TABLE_NAME}(id INT PRIMARY KEY, data TEXT NOT NULL)"
+    private static final String OTHER_INSERT_SQL = "INSERT INTO ${OTHER_TABLE_NAME}(id, data) VALUES(?, ?)"
     private static final int ASYNC_ASSERTION_TIMEOUT_IN_SECS = 5
 
     @Shared
     @AutoCleanup
     private Sql sql
+    @Shared
+    @AutoCleanup
+    private Sql sqlForOtherDatabase
     @Shared
     @AutoCleanup
     private EmbeddedPostgresContainer database
@@ -55,8 +61,13 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
         exceptionThrowingPublisher = ExceptionThrowingPublisher.willNotThrowException(inMemoryPublisher)
         database.sqlForDefaultDatabaseAndSchema().tap {
             it.execute(CREATE_SCHEMA_SQL)
+            it.execute(CREATE_OTHER_DATABASE_SQL)
+            it.close()
         }
         sql = database.sqlForDefaultDatabaseAndCustomSchema(SCHEMA_NAME).tap {
+            it.execute(CREATE_TABLE_SQL)
+        }
+        sqlForOtherDatabase = database.sqlForCustomDatabaseAndDefaultSchema(OTHER_DATABASE_NAME).tap {
             it.execute(CREATE_TABLE_SQL)
         }
         databaseConfig = database.configuration()
@@ -75,6 +86,7 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
 
     def cleanup() {
         sql.execute(DELETE_ALL_SQL)
+        sqlForOtherDatabase.execute(DELETE_ALL_SQL)
         inMemoryPublisher.reset()
         exceptionThrowingPublisher.reset()
         consumer.close()
@@ -187,6 +199,22 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
         secondConsumer.close()
     }
 
+    def "change data capture messages from other tables in same database and schema are consumed but not published"() {
+        given:
+        sql.execute(CREATE_OTHER_TABLE_SQL)
+
+        when:
+        10.times {
+            sql.executeInsert(OTHER_INSERT_SQL, [it, "stuff $it" as String])
+        }
+
+        then:
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            walBytesRemainingToConsume() == 0
+            inMemoryPublisher.empty()
+        }
+    }
+
     def "change data capture messages from other schemas of the same database are consumed but not published"() {
         given:
         sql.execute(CREATE_OTHER_SCHEMA_SQL)
@@ -210,12 +238,6 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
     }
 
     def "consumer LSN position remains up-to-date (via keepalive messages) during activity in other database"() {
-        given:
-        sql.execute(CREATE_OTHER_DATABASE_SQL)
-        def sqlForOtherDatabase = database.sqlForCustomDatabaseAndDefaultSchema(OTHER_DATABASE_NAME).tap {
-            it.execute(CREATE_TABLE_SQL)
-        }
-
         when:
         10.times {
             sqlForOtherDatabase.executeInsert(INSERT_SQL, [it, "stuff $it" as String])
@@ -226,13 +248,38 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
             walBytesRemainingToConsume() == 0
             inMemoryPublisher.empty()
         }
-
-        cleanup:
-        sqlForOtherDatabase.close()
     }
 
-    private boolean replicationSlotDoesNotExist() {
-        sql.rows("SELECT * FROM pg_replication_slots WHERE slot_name = ?", [REPLICATION_SLOT_NAME]).size() == 0
+    def "keepalive messages due to other database activity does not advance consumer LSN position while publishing \
+         of change data capture message remains unsuccessful"() {
+        given:
+        exceptionThrowingPublisher.willThrowException()
+        sql.executeInsert(INSERT_SQL, [1, "stuff 1"])
+
+        and:
+        10.times {
+            sqlForOtherDatabase.executeInsert(INSERT_SQL, [it, "stuff $it" as String])
+        }
+
+        expect:
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            exceptionThrowingPublisher.hasThrownException()
+            walBytesRemainingToConsume() > 0
+            inMemoryPublisher.empty()
+        }
+
+        when:
+        exceptionThrowingPublisher.willNotThrowException()
+
+        then:
+        new PollingConditions(timeout: ASYNC_ASSERTION_TIMEOUT_IN_SECS).eventually {
+            walBytesRemainingToConsume() == 0
+            inMemoryPublisher.published() == [new Data(id: 1, data: "stuff 1")]
+        }
+    }
+
+    private boolean replicationSlotExists() {
+        sql.rows("SELECT * FROM pg_replication_slots WHERE slot_name = ?", [REPLICATION_SLOT_NAME]).size() == 1
     }
 
     private int walBytesRemainingToConsume() {
@@ -260,7 +307,7 @@ class PostgresChangeDataCaptureConsumerIntegrationTest extends Specification {
         ).tap {
             it.start()
         }
-        while (replicationSlotDoesNotExist()) {
+        while (!replicationSlotExists()) {
             Thread.sleep(100)
         }
         consumer
