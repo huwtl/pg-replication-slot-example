@@ -14,4 +14,8 @@ public class CountingPublisher implements Publisher {
         numberOfPublishes++;
         LOGGER.info("Number of publishes {} - data published {}", numberOfPublishes, data);
     }
+
+    long numberOfPublishes() {
+        return numberOfPublishes;
+    }
 }
